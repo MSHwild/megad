@@ -46,7 +46,7 @@ if not defined NSIS (
 echo.
 echo 완료!
 echo   dist\MaeGuard.exe              - 프로그램 단독 실행 파일
-echo   dist\MaeGuard_Setup_1.4.0.exe  - 배포용 설치 프로그램
+echo   dist\MaeGuard_Setup_1.4.1.exe  - 배포용 설치 프로그램
 explorer dist
 pause
 exit /b 0

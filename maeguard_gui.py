@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 import maeguard as mg
 import maeguard_engines as me
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 FOLDER_NAMES = {"downloads": "다운로드", "desktop": "바탕화면", "바탕 화면": "바탕화면",
                 "documents": "문서", "문서": "문서", "startup": "시작프로그램"}
 
@@ -287,7 +287,7 @@ class MaeGuardApp:
 
         prog = tk.Frame(r, bg=BG)
         prog.pack(fill="x", padx=18, pady=(10, 0))
-        self.progress = ttk.Progressbar(prog, mode="indeterminate")
+        self.progress = ttk.Progressbar(prog, mode="determinate", value=0)
         self.progress.pack(fill="x")
         self.progress_label = tk.Label(prog, text="", font=self.f_small, bg=BG, fg=MUTED, anchor="w")
         self.progress_label.pack(fill="x")
@@ -338,20 +338,20 @@ class MaeGuardApp:
         if not me.load_config().get("abusech_key"):
             missing.append("MalwareBazaar")
         self.status_eng.config(text="검사 엔진: " + " · ".join(names)
-                               + (f"   (꺼짐: {', '.join(missing)} - 설정에서 키 입력)" if missing else ""))
+                               + (f"   (꺼짐: {' · '.join(missing)} - 설정에서 키를 입력하세요)" if missing else ""))
         if on:
             self.status_dot.config(fg=OK)
             self.status_bar.config(bg=OK)
-            self.status_title.config(text="보호 중입니다")
+            self.status_title.config(text="실시간 감시가 켜져 있습니다")
             names = folder_labels(self.watch_folders)
-            self.status_sub.config(text=f"실시간 감시: {names}  ·  악성코드 DB {self.sig_count:,}개")
-            self.watch_btn.config(text="감시 끄기")
+            self.status_sub.config(text=f"감시 중인 폴더: {names}  ·  악성코드 해시 {self.sig_count:,}개")
+            self.watch_btn.config(text="실시간 감시 끄기")
         else:
             self.status_dot.config(fg=DANGER)
             self.status_bar.config(bg=DANGER)
             self.status_title.config(text="실시간 감시가 꺼져 있습니다")
-            self.status_sub.config(text=f"새 파일을 자동으로 검사하지 않습니다  ·  악성코드 DB {self.sig_count:,}개")
-            self.watch_btn.config(text="감시 켜기")
+            self.status_sub.config(text=f"새 파일을 자동으로 검사하지 않습니다  ·  악성코드 해시 {self.sig_count:,}개")
+            self.watch_btn.config(text="실시간 감시 켜기")
         self._refresh_tray()
 
     def ask_block(self, r) -> bool:
@@ -381,21 +381,21 @@ class MaeGuardApp:
         if self.ask_block(r):
             try:
                 qid = mg.quarantine(r)
-                self.ui(lambda: self.add_row("차단", r.path, f"{r.verdict} · 격리 ID {qid} · {r.reasons[0]}", "block"))
+                self.ui(lambda: self.add_row("차단", r.path, f"{r.verdict} · {r.top_reason} · 격리 ID {qid}", "block"))
                 return "차단"
             except OSError as e:
                 self.ui(lambda err=str(e): self.add_row("실패", r.path, f"차단 실패: {err}", "allow"))
                 return "허용"
         mg.log(f"허용: {r.path} ({r.verdict}, 점수 {r.score})")
-        self.ui(lambda: self.add_row("허용", r.path, f"{r.verdict} · 점수 {r.score}", "allow"))
+        self.ui(lambda: self.add_row("허용", r.path, f"{r.verdict} · {r.top_reason} · 점수 {r.score}", "allow"))
         return "허용"
 
-    def start_watch(self):
+    def start_watch(self, quiet: bool = False):
         if self.watch_stop is not None:
             return
         self.watch_folders = mg.default_watch_folders()
         if not self.watch_folders:
-            self.add_row("오류", "", "감시할 폴더를 찾을 수 없습니다", "allow")
+            self.add_row("실패", "", "감시할 폴더를 찾을 수 없습니다", "allow")
             return
         self.watch_stop = threading.Event()
         stop = self.watch_stop
@@ -410,16 +410,18 @@ class MaeGuardApp:
             threading.Thread(target=lambda f=folder: mg.Watcher(f, on_result, engines=self.engines).run(stop), daemon=True).start()
         names = folder_labels(self.watch_folders)
         mg.log(f"감시 시작: {[str(f) for f in self.watch_folders]}")
-        self.add_row("시작", "", f"실시간 감시 시작: {names}", "ok")
+        if not quiet:
+            self.add_row("켜짐", "", f"실시간 감시를 켰습니다 ({names})", "ok")
         self._update_status()
 
-    def stop_watch(self):
+    def stop_watch(self, quiet: bool = False):
         if self.watch_stop is None:
             return
         self.watch_stop.set()
         self.watch_stop = None
         mg.log("감시 종료")
-        self.add_row("중지", "", "실시간 감시를 껐습니다", "allow")
+        if not quiet:
+            self.add_row("꺼짐", "", "실시간 감시를 껐습니다", "allow")
         self._update_status()
 
     def toggle_watch(self):
@@ -439,29 +441,29 @@ class MaeGuardApp:
             msgs, failed = [], False
             try:
                 added = mg.update_signatures(me.load_config().get("abusech_key", ""))
-                msgs.append(f"악성코드 DB {added:,}개 추가")
+                msgs.append(f"악성코드 해시 {added:,}개 추가")
             except mg.NoAuthKey:
                 if manual:
-                    msgs.append("악성코드 DB 건너뜀 (설정에서 abuse.ch 키 입력)")
+                    msgs.append("악성코드 해시: 건너뜀 (설정에서 abuse.ch 키를 입력하세요)")
             except Exception as e:
                 failed = True
                 mg.log(f"악성코드 DB 업데이트 실패: {e}")
-                msgs.append(f"악성코드 DB 실패: {e}")
+                msgs.append(f"악성코드 해시: 실패 ({e})")
             y = self.engines.yara
             if y is not None and y.yara is not None and (manual or y.needs_update()):
                 try:
-                    msgs.append(f"YARA 규칙 {y.update():,}개")
+                    msgs.append(f"YARA 규칙 {y.update():,}개로 갱신")
                 except Exception as e:
                     failed = True
                     mg.log(f"YARA 업데이트 실패: {e}")
-                    msgs.append("YARA 업데이트 실패")
+                    msgs.append("YARA 규칙: 실패")
             total = len(mg.load_signatures())
 
             def done():
                 self.sig_count = total
                 self._update_status()
                 if msgs:
-                    text = " · ".join(msgs) + f" (해시 총 {total:,}개)"
+                    text = " · ".join(msgs) + f" (악성코드 해시 총 {total:,}개)"
                     self.add_row("실패" if failed else "업데이트", "", text, "allow" if failed else "ok")
                 if manual:
                     body = "\n".join(msgs) or "이미 최신입니다."
@@ -487,9 +489,11 @@ class MaeGuardApp:
         for b in (self.btn_quick, self.btn_full, self.btn_folder, self.btn_file):
             b.config(state=state)
         if on:
+            self.progress.config(mode="indeterminate")
             self.progress.start(12)
         else:
             self.progress.stop()
+            self.progress.config(mode="determinate", value=0)
 
     def start_scan(self, targets, label="검사"):
         if self.scan_running:
@@ -596,10 +600,10 @@ class MaeGuardApp:
             me.save_config(cfg)
             self.engines = me.Engines(cfg)
             if self.watch_stop is not None:
-                self.stop_watch()
-                self.start_watch()
+                self.stop_watch(quiet=True)
+                self.start_watch(quiet=True)
             self._update_status()
-            self.add_row("설정", "", "검사 엔진: " + ", ".join(["매가드"] + self.engines.active_names()), "ok")
+            self.add_row("설정", "", "설정을 저장했습니다 · 검사 엔진: " + " · ".join(["매가드"] + self.engines.active_names()), "ok")
             win.destroy()
             y = self.engines.yara
             if key_changed and cfg["abusech_key"]:

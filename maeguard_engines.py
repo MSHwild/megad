@@ -274,7 +274,7 @@ class Engines:
         if self.vt and self.vt.available:
             names.append("VirusTotal")
         if self.yara and self.yara.available:
-            names.append(f"YARA {self.yara.count:,}규칙")
+            names.append(f"YARA 규칙 {self.yara.count:,}개")
         return names
 
     def apply(self, path: Path, sha256: str, r, vt_wait: float = 65, use_vt: bool = True) -> None:

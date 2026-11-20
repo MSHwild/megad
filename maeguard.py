@@ -274,6 +274,14 @@ class ScanResult:
     def add(self, score: int, reason: str):
         self.score += score
         self.reasons.append(reason)
+        self._scores = getattr(self, "_scores", []) + [score]
+
+    @property
+    def top_reason(self) -> str:
+        if not self.reasons:
+            return ""
+        scores = getattr(self, "_scores", [0] * len(self.reasons))
+        return self.reasons[max(range(len(self.reasons)), key=lambda i: scores[i])]
 
     @property
     def verdict(self) -> str:
