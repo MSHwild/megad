@@ -95,6 +95,20 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: 매가드 ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## 설치
+            1. 아래 **Assets** 에서 `MaeGuard_Setup_1.4.0.exe` 를 받아 실행하세요.
+            2. "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행** 을 누르세요. (아직 코드 서명이 없어서 뜹니다)
+            3. 설치가 끝나면 시계 옆 트레이에서 자동으로 보호를 시작합니다.
+
+            설치 없이 쓰려면 `MaeGuard.exe` 를 받아 바로 실행해도 됩니다.
+
+            ## 참고
+            - 베타 버전입니다. 문제가 있으면 [Issues](https://github.com/MSHwild/megad/issues) 에 남겨주세요.
+            - Windows Defender와 함께 사용하세요.
+            - MalwareBazaar · VirusTotal 연동은 설정에서 무료 키를 넣으면 켜집니다.
           files: |
             dist/MaeGuard.exe
             dist/MaeGuard_Setup_*.exe
