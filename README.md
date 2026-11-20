@@ -69,6 +69,10 @@ tests/                자동 테스트
 VirusTotal 무료 API와 abuse.ch 데이터는 비상업적 용도로만 쓸 수 있습니다.
 YARA 규칙은 저장소에 포함하지 않고 사용자 PC가 직접 내려받으며, 각 규칙의 라이선스는 규칙 파일 안에 표시되어 있습니다.
 
+## 코드 서명
+
+[SignPath Foundation](https://signpath.org/) 오픈소스 무료 코드 서명을 신청 중입니다. 서명 정책은 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) 를 참고하세요.
+
 ## 라이선스
 
 [MIT](LICENSE)
