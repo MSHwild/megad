@@ -97,6 +97,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: |
-            dist/MaeGuard.exe
-            dist/MaeGuard_Setup_*.exe
+          files: dist/MaeGuard_Setup_*.exe

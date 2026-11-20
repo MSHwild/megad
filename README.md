@@ -46,7 +46,7 @@
 ## 직접 빌드
 
 Windows + Python 3.12 에서 `build.bat` 실행 → `dist/` 에 `MaeGuard.exe` 와 설치 파일이 생성됩니다.
-태그(`v1.4.0` 등)를 푸시하면 GitHub Actions 가 자동으로 빌드해서 Releases 에 올립니다.
+GitHub 에서 릴리스를 Publish 하면 Actions 가 자동으로 빌드해서 설치 파일을 릴리스에 올립니다.
 
 ```
 python tests/test_maeguard.py
