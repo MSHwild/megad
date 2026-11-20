@@ -14,11 +14,18 @@ jobs:
   test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python -m pip install yara-python
+      - name: Download YARA rules for tests
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/YARAHQ/yara-forge/releases/latest/download/yara-forge-rules-core.zip -OutFile yf.zip
+          Expand-Archive yf.zip yf
+          $rule = (Get-ChildItem yf -Recurse -Filter *.yar | Select-Object -First 1).FullName
+          "MAEGUARD_TEST_YARA=$rule" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Run tests
         run: python tests/test_maeguard.py
         env:
@@ -29,8 +36,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python -m pip install pyinstaller==6.11.1 yara-python pystray pillow

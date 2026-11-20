@@ -72,6 +72,8 @@ MALICIOUS = {
                    b'thisFile.SaveAs(Path.Combine(x)); %>\n',
 }
 
+YARA_ONLY = {"upload.aspx"}
+
 BENIGN = {
     "notes.txt": "오늘 할 일: 숙제, 게임".encode(),
     "cat.jpg": b"\xff\xd8\xff\xe0 normal jpeg",
@@ -91,7 +93,11 @@ def test_detection(engines):
     d.mkdir()
     for n, data in {**MALICIOUS, **BENIGN}.items():
         (d / n).write_bytes(data)
+    has_yara = bool(engines and engines.yara and engines.yara.available)
     for n in MALICIOUS:
+        if n in YARA_ONLY and not has_yara:
+            print(f"  SKIP  탐지: {n}  (YARA 규칙 없음)")
+            continue
         r = mg.scan_file(d / n, SIGS, engines, vt_wait=0)
         check(f"탐지: {n}", r.verdict != "안전", f"점수 {r.score} {r.reasons}")
     for n in BENIGN:

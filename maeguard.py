@@ -719,8 +719,18 @@ class Watcher:
                         continue
         return out
 
+    @staticmethod
+    def _real_stat(p: Path):
+        # 윈도우는 폴더 목록의 크기/시간이 쓰는 중에 늦게 갱신되므로 파일을 직접 stat
+        try:
+            st = os.stat(p)
+        except OSError:
+            return None
+        return st.st_size, st.st_mtime_ns
+
     def run(self, stop_event=None) -> None:
-        seen = {p: st[1] for p, st in self._snapshot().items()}
+        listed = self._snapshot()
+        scanned = {}
         pending = {}
         while not (stop_event and stop_event.is_set()):
             if stop_event:
@@ -729,16 +739,28 @@ class Watcher:
                     break
             else:
                 time.sleep(self.interval)
-            for p, (size, mtime) in self._snapshot().items():
+            now = self._snapshot()
+            for p in list(pending):
+                if p not in now:
+                    pending.pop(p)
+            for p, sig in now.items():
                 if p.suffix.lower() in PARTIAL_EXT:
                     continue
-                if seen.get(p) == mtime:
+                if listed.get(p) == sig and p not in pending:
                     continue
-                if pending.get(p) != (size, mtime):
-                    pending[p] = (size, mtime)
+                real = self._real_stat(p)
+                if real is None:
+                    continue
+                if scanned.get(p) == real:
+                    listed[p] = sig
+                    pending.pop(p, None)
+                    continue
+                if pending.get(p) != real:
+                    pending[p] = real
                     continue
                 pending.pop(p, None)
-                seen[p] = mtime
+                listed[p] = sig
+                scanned[p] = real
                 self.on_result(scan_file(p, self.sigs, self.engines, deep=True))
 
 
