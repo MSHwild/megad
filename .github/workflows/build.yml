@@ -55,6 +55,36 @@ jobs:
         run: |
           choco install nsis -y --no-progress
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" /V2 installer.nsi
+      - name: Installer smoke test
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\MaeGuard_Setup_*.exe).FullName
+          Start-Process $setup -ArgumentList "/S" -Wait
+          $dir = "$env:LOCALAPPDATA\Programs\MaeGuard"
+          foreach ($f in "MaeGuard.exe","signatures.txt","icon.ico","uninstall.exe") {
+            if (-not (Test-Path "$dir\$f")) { throw "missing after install: $f" }
+          }
+          $run = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run").MaeGuard
+          if (-not $run) { throw "autostart not registered" }
+          $un = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MaeGuard"
+          if ($un.DisplayName -ne "매가드") { throw "uninstall entry wrong: $($un.DisplayName)" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\매가드\매가드.lnk")) { throw "start menu shortcut missing" }
+          Write-Host "install OK: $run"
+
+          $p = Start-Process "$dir\MaeGuard.exe" -ArgumentList "--tray" -PassThru
+          Start-Sleep 15
+          if ($p.HasExited) { throw "MaeGuard exited early (code $($p.ExitCode))" }
+          $log = Get-Content "$env:USERPROFILE\.maeguard\log.txt" -Raw
+          Write-Host $log
+          if ($log -notmatch "감시 시작") { throw "watcher did not start" }
+          Stop-Process -Id $p.Id -Force
+
+          Start-Process "$dir\uninstall.exe" -ArgumentList "/S","_?=$dir" -Wait
+          Remove-Item "$dir\uninstall.exe" -ErrorAction SilentlyContinue
+          if (Test-Path "$dir\MaeGuard.exe") { throw "exe left after uninstall" }
+          if ((Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run").MaeGuard) { throw "autostart left after uninstall" }
+          if (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\MaeGuard") { throw "uninstall entry left" }
+          Write-Host "uninstall OK"
       - uses: actions/upload-artifact@v4
         with:
           name: MaeGuard
