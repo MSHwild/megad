@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 import maeguard as mg
 import maeguard_engines as me
 
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 FOLDER_NAMES = {"downloads": "다운로드", "desktop": "바탕화면", "바탕 화면": "바탕화면",
                 "documents": "문서", "문서": "문서", "startup": "시작프로그램"}
 
