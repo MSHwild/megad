@@ -216,6 +216,40 @@ def test_robustness():
     check("검사 직후 사라진 파일도 오류 없음", r is not None)
 
 
+def test_false_positives():
+    print("\n[5] 오탐 재발 방지 (실사용 중 발견된 사례)")
+    d = TMP / "fp"
+    d.mkdir()
+    plain_macro = zip_bytes({"xl/workbook.xml": b"<x/>",
+                             "xl/vbaProject.bin": b"Attribute VB_Name = \"Module1\"\nSub Calc()\nRange(\"A1\").Value = 1\nEnd Sub"})
+    many = zip_bytes({f"기출문제{i}회.xlsm": plain_macro for i in range(40)})
+    (d / "엑셀 기출 모음.zip").write_bytes(many)
+    r = mg.scan_file(d / "엑셀 기출 모음.zip", SIGS)
+    check("일반 매크로 엑셀 40개 든 zip은 통과", r.verdict == "안전", f"점수 {r.score} {r.reasons[:3]}")
+    (d / "단일.xlsm").write_bytes(plain_macro)
+    r = mg.scan_file(d / "단일.xlsm", SIGS)
+    check("일반 매크로 엑셀 파일 하나는 통과", r.verdict == "안전", f"점수 {r.score} {r.reasons}")
+    bad_macro = zip_bytes({"xl/vbaProject.bin": b"Sub Workbook_Open()\nShell \"powershell -w hidden\"\nEnd Sub"})
+    (d / "급여명세서.zip").write_bytes(zip_bytes({f"급여{i}.xlsm": bad_macro for i in range(5)}))
+    r = mg.scan_file(d / "급여명세서.zip", SIGS)
+    check("자동 실행 + 셸 매크로 든 zip은 탐지", r.verdict != "안전", f"점수 {r.score}")
+    check("같은 이유는 한 번만 점수에 반영", r.score < 200 and any("파일 5개" in x for x in r.reasons), f"점수 {r.score} {r.reasons}")
+
+    try:
+        import maeguard_engines as me
+    except Exception:
+        return
+    ok = b"Scan starting...\r\nScan finished.\r\nScanning C:\\a.py found no threats.\r\n"
+    hit = (b"Scan starting...\r\nScan finished.\r\nScanning C:\\e.com found 1 threats.\r\n"
+           b"Threat                  : Virus:DOS/EICAR_Test_File\r\n")
+    err = b"CmdTool: Failed with hr = 0x80508023. Check C:\\Users\\x\\AppData\\Local\\Temp\\MpCmdRun.log\r\n"
+    check("Defender: 정상 결과 해석", me.parse_defender_output(0, ok) == (False, ""))
+    check("Defender: 탐지 결과 해석", me.parse_defender_output(2, hit) == (True, "Virus:DOS/EICAR_Test_File"))
+    check("Defender: 오류(코드 2)는 탐지로 보지 않음", me.parse_defender_output(2, err) is None,
+          me.parse_defender_output(2, err))
+    check("Defender: UTF-16 출력도 해석", me.parse_defender_output(2, hit.decode().encode("utf-16-le"))[0] is True)
+
+
 def main():
     engines = None
     try:
@@ -234,6 +268,7 @@ def main():
         test_watch()
         test_quarantine()
         test_robustness()
+        test_false_positives()
     finally:
         shutil.rmtree(TMP, ignore_errors=True)
     fails = [r for r in RESULTS if not r[1]]

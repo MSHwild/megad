@@ -361,8 +361,12 @@ class MaeGuardApp:
 
             def show():
                 title = f"{mg.APP_NAME} - {'악성코드 발견!' if r.verdict == '악성' else '의심스러운 파일'}"
+                scores = getattr(r, "_scores", [0] * len(r.reasons))
+                ranked = [x for _, x in sorted(zip(scores, r.reasons), key=lambda t: -t[0])]
+                shown = ranked[:8]
+                more = f"\n • 외 {len(ranked) - len(shown)}개" if len(ranked) > len(shown) else ""
                 body = (f"파일: {r.path}\n위험 점수: {r.score}\n\n이유:\n"
-                        + "\n".join(f" • {x}" for x in r.reasons)
+                        + "\n".join(f" • {x}" for x in shown) + more
                         + "\n\n이 파일을 차단(격리)할까요?")
                 self.root.deiconify()
                 self.root.lift()

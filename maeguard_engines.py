@@ -80,13 +80,34 @@ class DefenderEngine:
                 capture_output=True, timeout=120, creationflags=NO_WINDOW)
         except (OSError, subprocess.TimeoutExpired) as e:
             return None if isinstance(e, OSError) else (False, "시간 초과")
-        out = proc.stdout.decode("utf-8", "ignore") + proc.stdout.decode("cp949", "ignore")
-        if proc.returncode == 2:
-            m = re.search(r"Threat\s*:\s*(\S+)", out) or re.search(r"위협\s*:\s*(\S+)", out)
-            return True, (m.group(1) if m else "알 수 없는 위협")
-        if proc.returncode == 0:
-            return False, ""
-        return None
+        res = parse_defender_output(proc.returncode, proc.stdout + proc.stderr)
+        if res is None:
+            _log_engine(f"Defender 결과를 읽지 못함 (코드 {proc.returncode}): {path}")
+        return res
+
+
+def parse_defender_output(returncode: int, raw: bytes):
+    if b"\x00" in raw[:200]:
+        out = raw.decode("utf-16-le", "ignore")
+    else:
+        out = raw.decode("utf-8", "ignore") + "\n" + raw.decode("cp949", "ignore")
+    name = re.search(r"Threat\s*:\s*(\S+)", out) or re.search(r"위협\s*:\s*(\S+)", out)
+    found = re.search(r"found\s+(\d+)\s+threat", out, re.I)
+    if name or (found and int(found.group(1)) > 0):
+        return True, (name.group(1) if name else "Defender 탐지")
+    if returncode in (0, 2) and (found or "Scan finished" in out or "no threats" in out):
+        return False, ""
+    return None
+
+
+def _log_engine(msg: str) -> None:
+    try:
+        from datetime import datetime
+        HOME.mkdir(parents=True, exist_ok=True)
+        with open(HOME / "log.txt", "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+    except OSError:
+        pass
 
 
 class VirusTotalEngine:

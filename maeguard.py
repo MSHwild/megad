@@ -317,7 +317,7 @@ def check_name(name: str, r: ScanResult, where: str = "", ext_score: bool = True
         if LURE_NAME.search(p.stem):
             r.add(30, f"{where}크랙/치트/무료 재화 미끼 이름")
     if ext in MACRO_EXT:
-        r.add(15, f"{where}매크로 포함 문서 형식 ({ext})")
+        r.add(5, f"{where}매크로 포함 문서 형식 ({ext})")
     return ext in DANGEROUS_EXT
 
 
@@ -390,17 +390,41 @@ def check_content(data: bytes, ext: str, r: ScanResult, where: str = "") -> None
             r.add(15, f"{where}PDF 안에 숨겨진 첨부파일")
 
     if data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" and b"Attribute VB_" in data:
-        r.add(25, f"{where}문서에 매크로 포함")
+        r.add(10, f"{where}문서에 매크로 포함")
         if re.search(rb"(?i)auto_?open|document_open|workbook_open", data):
-            r.add(20, f"{where}문서를 열면 매크로 자동 실행")
+            r.add(15, f"{where}문서를 열면 매크로 자동 실행")
         if re.search(rb"(?i)shell|createobject|urldownloadtofile", data):
-            r.add(25, f"{where}매크로가 프로그램 실행/다운로드")
+            r.add(30, f"{where}매크로가 프로그램 실행/다운로드")
 
 
 MAX_ARCHIVE_DEPTH = 3
 
 
-def check_archive(path, ext: str, r: ScanResult, sigs: dict, depth: int = 1, prefix: str = "") -> None:
+_PREFIX_RE = re.compile(r"^\[압축 안 [^\]]*\] ")
+
+
+def check_archive(path, ext: str, r: ScanResult, sigs: dict) -> None:
+    inner = ScanResult(r.path)
+    _walk_archive(path, ext, inner, sigs)
+    merged = {}
+    scores = getattr(inner, "_scores", [0] * len(inner.reasons))
+    for sc, reason in zip(scores, inner.reasons):
+        base = _PREFIX_RE.sub("", reason)
+        if base in merged:
+            old_sc, first, cnt = merged[base]
+            merged[base] = (max(old_sc, sc), first, cnt + 1)
+        else:
+            merged[base] = (sc, reason, 1)
+    for base, (sc, first, cnt) in merged.items():
+        if cnt > 1 and first != base:
+            r.add(sc, f"[압축 안 파일 {cnt}개] {base}")
+        else:
+            r.add(sc, first)
+    if inner.malware_name and not r.malware_name:
+        r.malware_name = inner.malware_name
+
+
+def _walk_archive(path, ext: str, r: ScanResult, sigs: dict, depth: int = 1, prefix: str = "") -> None:
     import io
     import zipfile
     try:
@@ -422,15 +446,15 @@ def check_archive(path, ext: str, r: ScanResult, sigs: dict, depth: int = 1, pre
                     encrypted_exec = True
                 continue
             if mname.lower().endswith("vbaproject.bin"):
-                r.add(25, "문서에 매크로 포함")
+                r.add(10, f"{where}문서에 매크로 포함")
                 try:
                     vba = zf.read(info)[:MAX_CONTENT_SCAN]
                 except Exception:
                     vba = b""
                 if re.search(rb"(?i)auto_?open|document_open|workbook_open", vba):
-                    r.add(20, "문서를 열면 매크로 자동 실행")
+                    r.add(15, f"{where}문서를 열면 매크로 자동 실행")
                 if re.search(rb"(?i)shell|createobject|urldownloadtofile|powershell", vba):
-                    r.add(25, "매크로가 프로그램 실행/다운로드")
+                    r.add(30, f"{where}매크로가 프로그램 실행/다운로드")
                 continue
             if ext not in {".zip", ".jar"} and mext in {".xml", ".rels", ".png", ".jpeg", ".jpg", ".emf", ".wmf"}:
                 continue
@@ -449,7 +473,7 @@ def check_archive(path, ext: str, r: ScanResult, sigs: dict, depth: int = 1, pre
                     r.add(100, f"{where}알려진 악성코드: {sigs[h]}")
             check_content(member, mext, r, where)
             if member[:4] == b"PK\x03\x04" and depth < MAX_ARCHIVE_DEPTH and info.file_size <= MAX_CONTENT_SCAN:
-                check_archive(member, mext, r, sigs, depth + 1, prefix=f"{prefix}{Path(mname).name} > ")
+                _walk_archive(member, mext, r, sigs, depth + 1, prefix=f"{prefix}{Path(mname).name} > ")
         if encrypted_exec:
             r.add(40, "암호 걸린 압축파일 안에 실행파일 (백신 검사 회피 수법)")
         if 0 < len(infos) <= 3 and any(Path(i.filename).suffix.lower() in DANGEROUS_EXT for i in infos) \
